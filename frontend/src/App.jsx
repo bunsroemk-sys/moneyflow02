@@ -30,6 +30,7 @@ function App() {
   const [rows, setRows] = useState({ income: [], expense: [] });
   const [summary, setSummary] = useState(null);
   const [historyRecords, setHistoryRecords] = useState([]);
+  const [historyFilter, setHistoryFilter] = useState('all');
   const [historyStatus, setHistoryStatus] = useState('loading');
   const [historyError, setHistoryError] = useState('');
   const [dashboardStatus, setDashboardStatus] = useState('');
@@ -182,6 +183,18 @@ function App() {
   const currencyOptions = Object.entries(currencies).sort(([a], [b]) => a.localeCompare(b));
   const historyDate = new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
 
+  const filteredHistoryRecords = historyRecords.filter((record) => {
+  if (historyFilter === 'income') {
+    return (record.incomes || []).length > 0;
+  }
+
+  if (historyFilter === 'expense') {
+    return (record.expenses || []).length > 0;
+  }
+
+  return true;
+}); 
+
   return (
     <>
       <nav className="site-nav" aria-label="เมนูหลัก">
@@ -288,11 +301,19 @@ function App() {
                 <div className="section-heading"><span className="heading-icon" aria-hidden="true">◷</span><div><h2>ประวัติรายการ</h2><p>บันทึกวันและเวลาไว้กับบัญชีของคุณ</p></div></div>
                 <div className="history-actions"><span className="history-count">{historyRecords.length} รายการ</span><button className="history-delete" type="button" onClick={clearHistory} disabled={!historyRecords.length}>ลบประวัติ</button></div>
               </div>
+              
+              <div className="history-filters" role="group" aria-label="กรองประวัติ">
+                <button type="button" className={historyFilter === 'all' ? 'active' : ''} onClick={() => setHistoryFilter('all')}>ทั้งหมด</button>
+                <button type="button" className={historyFilter === 'income' ? 'active' : ''} onClick={() => setHistoryFilter('income')}>มีรายรับ</button>
+                <button type="button" className={historyFilter === 'expense' ? 'active' : ''} onClick={() => setHistoryFilter('expense')}>มีรายจ่าย</button>
+              </div>
+
               <div className="history-list" aria-live="polite">
                 {historyStatus === 'loading' && <div className="history-empty" role="status">กำลังโหลดประวัติ...</div>}
                 {historyStatus === 'error' && <div className="history-empty history-error" role="alert">{historyError}<button className="secondary history-retry" type="button" onClick={loadHistory}>ลองโหลดอีกครั้ง</button></div>}
                 {historyStatus === 'success' && !historyRecords.length && <div className="history-empty">รายการที่บันทึกจะแสดงที่นี่</div>}
-                {historyStatus === 'success' && historyRecords.map((record) => {
+                {historyStatus === 'success' && historyRecords.length > 0 && !filteredHistoryRecords.length && <div className="history-empty">ไม่พบประวัติในหมวดหมู่นี้</div>}
+                {historyStatus === 'success' && filteredHistoryRecords.map((record) => {
                   const createdAt = new Date(record.createdAt);
                   const sourceBalance = (record.incomes || []).reduce((sum, item) => sum + Number(item.amount || 0), 0)
                     - (record.expenses || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -302,18 +323,38 @@ function App() {
                         <time className="history-date" dateTime={record.createdAt}>{Number.isNaN(createdAt.getTime()) ? 'ไม่ทราบวันที่' : historyDate.format(createdAt)}</time>
                         <span className="history-currency">{record.from} → {record.to}</span>
                       </div>
-                      <div className="history-items">
-                        {[[record.incomes || [], 'รายรับ'], [record.expenses || [], 'รายจ่าย']].map(([items, title]) => (
-                          <div key={title}><h4>{title}</h4>{items.length ? items.map((item, index) => <div className="history-item" key={`${item.category}-${index}`}><span>{item.category}</span><strong>{formatMoney(item.amount, record.from)}</strong></div>) : <div className="history-item">ไม่มีรายการ</div>}</div>
-                        ))}
-                      </div>
+
                       <div className="history-totals">
                         {[
                           ['รับรวม', record.result.income, record.to, ''],
                           ['จ่ายรวม', record.result.expense, record.to, ''],
                           ['คงเหลือ (ต้นทาง)', sourceBalance, record.from, 'source-balance'],
                           ['คงเหลือ (ปลายทาง)', record.result.balance, record.to, 'balance'],
-                        ].map(([label, amount, code, className]) => <div className={`history-total ${className}`} key={label}><span>{label}</span><strong>{formatMoney(amount, code)}</strong></div>)}
+                        ].map(([label, amount, code, className]) => (
+                          <div className={`history-total ${className}`} key={label}>
+                            <span>{label}</span>
+                            <strong>{formatMoney(amount, code)}</strong>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="history-items">
+                        {[
+                          [record.incomes || [], 'รายรับ', 'income'],
+                          [record.expenses || [], 'รายจ่าย', 'expense'],
+                        ]
+                          .filter(([items, title, type]) => historyFilter === 'all' || historyFilter === type)
+                          .map(([items, title]) => (
+                            <div key={title}>
+                              <h4>{title}</h4>
+                              {items.length ? items.map((item, index) => (
+                                <div className="history-item" key={`${item.category}-${index}`}>
+                                  <span>{item.category}</span>
+                                  <strong>{formatMoney(item.amount, record.from)}</strong>
+                                </div>
+                              )) : <div className="history-item">ไม่มีรายการ</div>}
+                            </div>
+                          ))}
                       </div>
                     </article>
                   );
