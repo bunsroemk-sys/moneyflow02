@@ -1,15 +1,23 @@
 {
   "name": "801201-week8",
   "version": "1.0.0",
-  "description": "Week 8 - Stack + External REST API (Rick and Morty)",
+  "description": "Personal finance app with an Express API and React frontend",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev:backend": "node server.js",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "dependencies": {
     "express": "^4.22.3"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
   }
 }

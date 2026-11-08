@@ -1,0 +1,41 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Check final repository status",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"status",
+				"--short"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect npm lockfile changes",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"diff",
+				"--",
+				"package-lock.json"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Review lockfile diff without pager",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"--no-pager",
+				"diff",
+				"--",
+				"package-lock.json"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

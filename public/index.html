@@ -45,6 +45,20 @@
     .actions { display:flex; justify-content:flex-end; gap:10px; margin-top:22px; padding-top:21px; border-top:1px solid #edf1ee; }
     .actions button { width:auto; min-width:140px; padding-inline:20px; }
     #error { display:none; margin-bottom:16px; padding:13px 16px; border:1px solid #f1c7c5; border-radius:12px; color:#8d2b25; background:#fff2f0; }
+    .auth-panel { max-width:540px; margin-inline:auto; }
+    .auth-form { display:grid; gap:11px; }
+    .auth-form h2 { margin:0; }
+    .auth-form p { margin:4px 0 10px; color:var(--muted); font-size:13px; }
+    .auth-form label { margin:0; }
+    .auth-mode { border:0; background:transparent; color:var(--green-dark); }
+    .auth-error,.state-message.error { color:#8d2b25 !important; }
+    .state-message { margin:0 0 16px; padding:12px 15px; border-radius:10px; background:#edf7f1; color:var(--green-dark); }
+    .state-message.loading { background:#f1f5f2; color:var(--muted); }
+    .state-message.error { border:1px solid #f1c7c5; background:#fff2f0; }
+    .account-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .account-bar button { width:auto; min-width:120px; }
+    .history-error { border-color:#f1c7c5; color:#8d2b25; }
+    .history-retry { width:auto; display:block; margin:10px auto 0; }
     #summary { margin-top:22px; }
     .summary-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
     .metric { position:relative; overflow:hidden; padding:21px; border:1px solid #dcefe4; border-radius:15px; background:linear-gradient(145deg,#f3fbf6,#fff); }
@@ -88,6 +102,11 @@
 <body>
   <header><div class="brand"><span class="eyebrow">MONEYFLOW · PERSONAL FINANCE</span><h1>จัดการเงินของคุณ<br>ให้ง่ายขึ้นในทุกวัน</h1><p>ติดตามรายรับและรายจ่าย พร้อมแปลงสกุลเงินได้ในที่เดียว</p></div></header>
   <main>
+    <section id="authPanel" class="panel auth-panel" aria-live="polite">
+      <div id="authComponent"></div>
+    </section>
+    <div id="dashboardContent" hidden>
+    <div id="dashboardState" class="state-message" role="status" hidden></div>
     <div id="error" role="alert"></div>
     <section class="panel">
       <div class="section-heading"><span class="heading-icon" aria-hidden="true">↗</span><div><h2>บันทึกรายการ</h2><p>เพิ่มรายการและเลือกสกุลเงินที่ต้องการคำนวณ</p></div></div>
@@ -111,9 +130,10 @@
       <p class="rate" id="rateInfo"></p>
     </section>
     <section id="history" class="panel" aria-labelledby="historyTitle">
-      <div class="history-heading"><div class="section-heading"><span class="heading-icon" aria-hidden="true">◷</span><div><h2 id="historyTitle">ประวัติรายการ</h2><p>บันทึกวันและเวลาอัตโนมัติ เก็บไว้ในเบราว์เซอร์นี้</p></div></div><div class="history-heading-actions"><span id="historyCount" class="history-count">0 รายการ</span><button id="clearHistoryButton" class="history-delete" type="button" onclick="clearHistory()" disabled>ลบประวัติ</button></div></div>
+      <div class="history-heading"><div class="section-heading"><span class="heading-icon" aria-hidden="true">◷</span><div><h2 id="historyTitle">ประวัติรายการ</h2><p>บันทึกวันและเวลาไว้กับบัญชีของคุณ</p></div></div><div class="history-heading-actions"><span id="historyCount" class="history-count">0 รายการ</span><button id="clearHistoryButton" class="history-delete" type="button" onclick="clearHistory()" disabled>ลบประวัติ</button></div></div>
       <div id="historyList" class="history-list" aria-live="polite"></div>
     </section>
+    </div>
   </main>
   <script src="dashboard.js"></script>
 </body>

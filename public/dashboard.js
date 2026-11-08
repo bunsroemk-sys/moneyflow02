@@ -1,10 +1,92 @@
 let currencyNames = {};
 let categoryData = { income: [], expense: [] };
-const HISTORY_STORAGE_KEY = 'moneyflow-history-v1';
-let historyRecords = loadHistory();
+let historyRecords = [];
+let authMode = 'login';
+let activeUserId = null;
+
+function renderAuth({ status, user = null, error = '', mode = authMode }) {
+  const component = document.getElementById('authComponent');
+  if (status === 'loading') {
+    component.innerHTML = '<p class="state-message" role="status">กำลังตรวจสอบบัญชี...</p>';
+    return;
+  }
+  if (status === 'success' && user) {
+    component.innerHTML = `<div class="account-bar"><span>เข้าสู่ระบบด้วย <strong>${escapeHtml(user.email)}</strong></span><button id="logoutButton" class="secondary" type="button">ออกจากระบบ</button></div>`;
+    document.getElementById('logoutButton').addEventListener('click', logout);
+    return;
+  }
+
+  const registering = mode === 'register';
+  component.innerHTML = `<form id="authForm" class="auth-form">
+    <div><h2>${registering ? 'สร้างบัญชี' : 'เข้าสู่ระบบ'}</h2><p>${registering ? 'ใช้บัญชีนี้เพื่อเปิดดูข้อมูลของคุณจากอุปกรณ์อื่น' : 'เข้าสู่ระบบเพื่อดูข้อมูลที่บันทึกไว้กับบัญชีของคุณ'}</p></div>
+    <label for="authEmail">อีเมล</label><input id="authEmail" name="email" type="email" autocomplete="email" required maxlength="254">
+    <label for="authPassword">รหัสผ่าน</label><input id="authPassword" name="password" type="password" autocomplete="${registering ? 'new-password' : 'current-password'}" minlength="8" maxlength="128" required>
+    ${error ? `<p class="auth-error" role="alert">${escapeHtml(error)}</p>` : ''}
+    <button class="primary" type="submit" ${status === 'submitting' ? 'disabled' : ''}>${status === 'submitting' ? 'กำลังดำเนินการ...' : registering ? 'สมัครบัญชี' : 'เข้าสู่ระบบ'}</button>
+    <button id="authModeButton" class="auth-mode" type="button">${registering ? 'มีบัญชีแล้ว? เข้าสู่ระบบ' : 'ยังไม่มีบัญชี? สมัครใช้งาน'}</button>
+  </form>`;
+  document.getElementById('authForm').addEventListener('submit', submitAuth);
+  document.getElementById('authModeButton').addEventListener('click', () => {
+    authMode = registering ? 'login' : 'register';
+    renderAuth({ status: 'idle' });
+  });
+}
+
+function renderDashboardState({ status, message = '' }) {
+  const element = document.getElementById('dashboardState');
+  element.textContent = message;
+  element.hidden = !message;
+  element.className = `state-message ${status}`;
+  element.setAttribute('role', status === 'error' ? 'alert' : 'status');
+}
+
+async function submitAuth(event) {
+  event.preventDefault();
+  const values = Object.fromEntries(new FormData(event.currentTarget));
+  renderAuth({ status: 'submitting' });
+  try {
+    const response = await fetch(`/api/auth/${authMode}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'ดำเนินการไม่สำเร็จ');
+    await enterDashboard(result.user);
+  } catch (error) {
+    renderAuth({ status: 'error', error: error.message });
+  }
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  historyRecords = [];
+  activeUserId = null;
+  document.getElementById('dashboardContent').hidden = true;
+  document.getElementById('summary').hidden = true;
+  document.getElementById('incomeRows').replaceChildren();
+  document.getElementById('expenseRows').replaceChildren();
+  showError('');
+  authMode = 'login';
+  renderAuth({ status: 'idle' });
+}
+
+async function enterDashboard(user) {
+  if (activeUserId !== user.id) {
+    historyRecords = [];
+    document.getElementById('summary').hidden = true;
+    document.getElementById('incomeRows').replaceChildren();
+    document.getElementById('expenseRows').replaceChildren();
+    showError('');
+  }
+  activeUserId = user.id;
+  document.getElementById('authPanel').hidden = false;
+  document.getElementById('dashboardContent').hidden = false;
+  renderAuth({ status: 'success', user });
+  await loadDashboard();
+}
 
 async function loadDashboard() {
-  renderHistory();
+  renderDashboardState({ status: 'loading', message: 'กำลังโหลดข้อมูลบัญชี...' });
+  renderHistory({ records: historyRecords, status: 'loading' });
   try {
     const [currencyResponse, categoryResponse] = await Promise.all([fetch('/api/currencies'), fetch('/api/categories')]);
     if (!currencyResponse.ok || !categoryResponse.ok) throw new Error('โหลดข้อมูลเริ่มต้นไม่สำเร็จ');
@@ -13,7 +95,13 @@ async function loadDashboard() {
     renderCurrencies();
     addRow('income');
     addRow('expense');
-  } catch (error) { showError(error.message); }
+    renderDashboardState({ status: 'success', message: 'โหลดข้อมูลบัญชีสำเร็จ' });
+  } catch (error) {
+    renderDashboardState({ status: 'error', message: error.message });
+    renderHistory({ records: historyRecords, status: 'error', error: error.message });
+    return;
+  }
+  await loadHistory();
 }
 
 function renderCurrencies() {
@@ -56,12 +144,16 @@ function collectRows(type) {
   }).filter(item => item.amount > 0);
 }
 
-function loadHistory() {
+async function loadHistory() {
+  renderHistory({ records: historyRecords, status: 'loading' });
   try {
-    const records = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
-    return Array.isArray(records) ? records : [];
-  } catch {
-    return [];
+    const response = await fetch('/api/history');
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'โหลดประวัติไม่สำเร็จ');
+    historyRecords = result.records;
+    renderHistory({ records: historyRecords, status: 'success' });
+  } catch (error) {
+    renderHistory({ records: historyRecords, status: 'error', error: error.message });
   }
 }
 
@@ -69,21 +161,42 @@ function formatMoney(value, currency) {
   return `${Number(value).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ${currency}`;
 }
 
-function appendHistoryRecord(record) {
-  const updatedRecords = [record, ...historyRecords];
-  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedRecords));
-  historyRecords = updatedRecords;
-  renderHistory();
+async function appendHistoryRecord(record) {
+  const response = await fetch('/api/history', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'บันทึกประวัติไม่สำเร็จ');
+  historyRecords = [record, ...historyRecords].slice(0, 1000);
+  renderHistory({ records: historyRecords, status: 'success' });
 }
 
-function renderHistory() {
+function renderHistory({ records, status, error = '' }) {
   const list = document.getElementById('historyList');
   if (!list) return;
+  historyRecords = records;
   const count = document.getElementById('historyCount');
   count.textContent = `${historyRecords.length} รายการ`;
   document.getElementById('clearHistoryButton').disabled = historyRecords.length === 0;
   list.replaceChildren();
 
+  if (status === 'loading') {
+    list.innerHTML = '<div class="history-empty" role="status">กำลังโหลดประวัติ...</div>';
+    return;
+  }
+  if (status === 'error') {
+    const message = document.createElement('div');
+    message.className = 'history-empty history-error';
+    message.setAttribute('role', 'alert');
+    message.textContent = error || 'โหลดประวัติไม่สำเร็จ';
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'secondary history-retry';
+    retry.textContent = 'ลองโหลดอีกครั้ง';
+    retry.addEventListener('click', loadHistory);
+    list.append(message, retry);
+    return;
+  }
   if (historyRecords.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'history-empty';
@@ -161,12 +274,17 @@ function renderHistory() {
   }
 }
 
-function clearHistory() {
+async function clearHistory() {
   if (historyRecords.length === 0) return;
   if (!window.confirm('ต้องการลบประวัติทั้งหมดหรือไม่? เมื่อลบแล้วจะไม่สามารถกู้คืนได้')) return;
-  localStorage.removeItem(HISTORY_STORAGE_KEY);
-  historyRecords = [];
-  renderHistory();
+  try {
+    const response = await fetch('/api/history', { method: 'DELETE' });
+    if (!response.ok) throw new Error('ลบประวัติไม่สำเร็จ');
+    historyRecords = [];
+    renderHistory({ records: historyRecords, status: 'success' });
+  } catch (error) {
+    renderHistory({ records: historyRecords, status: 'error', error: error.message });
+  }
 }
 
 async function calculateSummary() {
@@ -198,7 +316,7 @@ async function calculateSummary() {
     document.getElementById('balanceTotal').textContent = format(result.balance);
     document.getElementById('rateInfo').textContent = `อัตราแลกเปลี่ยน 1 ${result.from} = ${result.rate} ${result.to}`;
     document.getElementById('summary').hidden = false;
-    appendHistoryRecord({ createdAt: new Date().toISOString(), from, to, incomes, expenses, result });
+    await appendHistoryRecord({ createdAt: new Date().toISOString(), from, to, incomes, expenses, result });
     resetForm({ keepSummary: true });
     showError('');
   } catch (error) { showError(error.message); }
@@ -218,4 +336,18 @@ function showError(message) {
   errorBox.style.display = message ? 'block' : 'none';
 }
 
-window.addEventListener('load', loadDashboard);
+async function initializeApp() {
+  renderAuth({ status: 'loading' });
+  try {
+    const response = await fetch('/api/auth/me');
+    if (!response.ok) throw new Error('not-authenticated');
+    const result = await response.json();
+    await enterDashboard(result.user);
+  } catch {
+    document.getElementById('dashboardContent').hidden = true;
+    document.getElementById('authPanel').hidden = false;
+    renderAuth({ status: 'idle' });
+  }
+}
+
+window.addEventListener('load', initializeApp);

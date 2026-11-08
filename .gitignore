@@ -1,0 +1,29 @@
+/data/
+/frontend/dist/
+node_modules/
+
+# Dependencies
+node_modules/
+
+# Environment variables and API Keys
+.env
+.env.*
+!.env.example
+
+# Build files
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# System files
+.DS_Store
+Thumbs.db
+
+node_modules/
+.env
+.env.*
+!.env.example
+accounts.json
